@@ -61,15 +61,42 @@ def detect_ocean(text):
 
 def extract_parameters_from_text(text):
     system_prompt = """
-    You are a helper that extracts parameters for Argo ocean data queries.
+    You are a helper that extracts parameters for Argo ocean data queries. 
     Output strictly as JSON with keys: start_date, end_date, variables, region
     Example: {"start_date":"2023-01-01","end_date":"2023-12-31","variables":["temperature","salinity"],"region":"Indian Ocean"}
+    And if the data is not requested and just explaination is requested or something like that then do not return any data, just return the explaination.
+    Example: Explain me the oceanography or explain a previous query.
+    
     """
     context = system_prompt + "\nUser: " + text + "\nAssistant:"
     response = model.generate_content(context).text
     params = parse_json_from_text(response)
     return params
 
+def explain_with_gemini(df: pd.DataFrame, query: str) -> str:
+    """Ask Gemini to explain the fetched dataset in plain language."""
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    
+    # We pass both query and a sample of the dataframe
+    df_sample = df.head(10).to_csv(index=False)  # only send preview to save tokens
+    prompt = f"""
+    You are an oceanography expert. 
+    Explain the following Argo dataset in very simple terms.
+
+    User query: {query}
+
+    Sample data (first 10 rows):
+    {df_sample}
+
+    Keep the explanation short and clear:
+    - What parameters are included (e.g., temperature, salinity, oxygen, etc.)
+    - What these parameters indicate about the ocean
+    - How this data answers the user’s query
+    """
+
+
+    response = model.generate_content(prompt)
+    return response.text
 # --- Streamlit UI ---
 st.set_page_config(page_title="Argo Chatbot", layout="wide")
 
@@ -231,6 +258,8 @@ if user_input:
 
                         with st.chat_message("assistant"):
                             st.markdown(answer)
+                            explanation = explain_with_gemini(df_selected, user_input)
+                            st.markdown(f"**Gemini Analysis:** {explanation}")
 
                     else:
                         answer = "No data was retrieved for your query period and region."
