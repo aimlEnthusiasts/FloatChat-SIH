@@ -5,13 +5,13 @@ from datetime import datetime, timedelta
 
 import streamlit as st
 import pandas as pd
-from dotenv import load_dotenv
+from decouple import config
 from argopy import DataFetcher, set_options
 import google.generativeai as genai
 
 # -------------------- CONFIG --------------------
-load_dotenv()
-API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API")
+
+API_KEY = config("GENOMI_API_KEY", default="").strip()
 if API_KEY:
     try:
         genai.configure(api_key=API_KEY)
@@ -20,7 +20,9 @@ if API_KEY:
         st.warning(f"Gemini model init failed: {e}")
         MODEL = None
 else:
-    st.info("No Gemini API key found — explanation features will use a fallback parser.")
+    st.info(
+        "No Gemini API key found — explanation features will use a fallback parser."
+    )
     MODEL = None
 
 # Use 0-360 longitude convention to avoid dateline issues in argopy
@@ -41,6 +43,7 @@ VAR_MAP = {
     "salinity": ["psal", "psal_adjusted", "psal_qc"],
     "pressure": ["pres", "pres_adjusted", "pres_qc"],
 }
+
 
 # -------------------- HELPERS --------------------
 def parse_json_from_text(text: str):
@@ -194,7 +197,11 @@ def extract_parameters_from_text(text: str):
         # Gemini call failed — try inference
         params = infer_params_from_user_text(text)
         if params:
-            return params, f"(Gemini call failed) {e}\nInferred params from user text.", True
+            return (
+                params,
+                f"(Gemini call failed) {e}\nInferred params from user text.",
+                True,
+            )
         return None, f"(Gemini call failed) {e}\nUser: {text}", False
 
     params = parse_json_from_text(raw)
@@ -205,7 +212,12 @@ def extract_parameters_from_text(text: str):
     # model returned explanation (plain text). Try to infer parameters from user text now.
     params_inferred = infer_params_from_user_text(text)
     if params_inferred:
-        return params_inferred, raw + "\n\n(Parameters inferred from user input because model returned an explanation.)", True
+        return (
+            params_inferred,
+            raw
+            + "\n\n(Parameters inferred from user input because model returned an explanation.)",
+            True,
+        )
 
     return None, raw, False
 
@@ -221,8 +233,14 @@ def fetch_region_chunk(bbox_segment, start_date, end_date):
         end_iso = chunk_end.strftime("%Y-%m-%dT23:59:59Z")
         try:
             df = (
-                DataFetcher(src="erddap", dataset="phy", erddap_server="https://www.ifremer.fr/erddap/")
-                .region([lon_min, lon_max, lat_min, lat_max, 0, 2000, start_iso, end_iso])
+                DataFetcher(
+                    src="erddap",
+                    dataset="phy",
+                    erddap_server="https://www.ifremer.fr/erddap/",
+                )
+                .region(
+                    [lon_min, lon_max, lat_min, lat_max, 0, 2000, start_iso, end_iso]
+                )
                 .to_dataframe()
                 .reset_index()
             )
@@ -268,7 +286,9 @@ def explain_with_gemini(df: pd.DataFrame, query: str) -> str:
 
 
 # -------------------- STREAMLIT UI --------------------
-st.set_page_config(page_title="Argo Chatbot (robust single-date + inference)", layout="wide")
+st.set_page_config(
+    page_title="Argo Chatbot (robust single-date + inference)", layout="wide"
+)
 st.title("🌊 Argo Chatbot — robust single-date handling & inference")
 
 if "messages" not in st.session_state:
@@ -302,19 +322,25 @@ if user_input:
     # If params is None -> explanation-only (raw_model_text contains that)
     if not params:
         assistant_text = raw_model_text or "Sorry — I could not produce an explanation."
-        st.session_state.messages.append({"role": "assistant", "content": assistant_text})
+        st.session_state.messages.append(
+            {"role": "assistant", "content": assistant_text}
+        )
         with st.chat_message("assistant"):
             st.markdown(assistant_text)
     else:
         # post-process params: single-date => end_date = start_date; default variable; default region inference
-        if "start_date" in params and ("end_date" not in params or not params.get("end_date")):
+        if "start_date" in params and (
+            "end_date" not in params or not params.get("end_date")
+        ):
             params["end_date"] = params["start_date"]
         if "variables" not in params or not params.get("variables"):
             params["variables"] = ["temperature"]
         if "region" not in params or not params.get("region"):
             inferred_ocean, _ = detect_ocean(user_input)
             if inferred_ocean:
-                params["region"] = inferred_ocean if inferred_ocean != "pacific" else "Pacific Ocean"
+                params["region"] = (
+                    inferred_ocean if inferred_ocean != "pacific" else "Pacific Ocean"
+                )
             else:
                 params["region"] = ""
 
@@ -347,13 +373,18 @@ if user_input:
                     ocean_key, bbox = region_raw, OCEAN_BBOX[region_raw]
                 else:
                     err = "Please specify a valid ocean (e.g., 'Indian Ocean', 'Atlantic Ocean', 'Pacific Ocean')."
-                    st.session_state.messages.append({"role": "assistant", "content": err})
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": err}
+                    )
                     with st.chat_message("assistant"):
                         st.markdown(err)
                     st.stop()
 
             if ocean_key == "pacific":
-                fetch_list = [("Pacific West", OCEAN_BBOX["pacific west"]), ("Pacific East", OCEAN_BBOX["pacific east"])]
+                fetch_list = [
+                    ("Pacific West", OCEAN_BBOX["pacific west"]),
+                    ("Pacific East", OCEAN_BBOX["pacific east"]),
+                ]
             elif ocean_key in ("pacific west", "pacific east"):
                 fetch_list = [(ocean_key.title(), OCEAN_BBOX[ocean_key])]
             else:
@@ -394,22 +425,33 @@ if user_input:
                                 guesses.append(cand)
                     selected = list(dict.fromkeys(guesses))
 
-                base_cols = [c for c in ("latitude", "longitude", "time") if c in df_full.columns]
+                base_cols = [
+                    c for c in ("latitude", "longitude", "time") if c in df_full.columns
+                ]
                 final_cols = base_cols + selected
-                final_cols = [c for i, c in enumerate(final_cols) if c not in final_cols[:i]]
+                final_cols = [
+                    c for i, c in enumerate(final_cols) if c not in final_cols[:i]
+                ]
                 df_selected = df_full[final_cols] if final_cols else df_full.copy()
 
                 ds_id = len(st.session_state.datasets)
-                st.session_state.datasets.append({
-                    "id": ds_id,
-                    "ocean": ocean_key.title(),
-                    "start_date": start_date.date().isoformat(),
-                    "end_date": end_date.date().isoformat(),
-                    "variables": requested_vars,
-                    "df": df_selected
-                })
+                st.session_state.datasets.append(
+                    {
+                        "id": ds_id,
+                        "ocean": ocean_key.title(),
+                        "start_date": start_date.date().isoformat(),
+                        "end_date": end_date.date().isoformat(),
+                        "variables": requested_vars,
+                        "df": df_selected,
+                    }
+                )
 
-                compute_avg = bool(re.search(r"\b(average|avg|mean|mean temperature|mean salinity)\b", user_input.lower()))
+                compute_avg = bool(
+                    re.search(
+                        r"\b(average|avg|mean|mean temperature|mean salinity)\b",
+                        user_input.lower(),
+                    )
+                )
                 stats_text = ""
                 if compute_avg and selected:
                     stats_lines = []
@@ -430,12 +472,20 @@ if user_input:
                 # if we inferred params from user text (because Gemini returned explanation),
                 # show a one-line notice so user knows inference happened
                 if inferred_flag:
-                    summary += "\n\n(Note: parameters were inferred from your query text.)"
+                    summary += (
+                        "\n\n(Note: parameters were inferred from your query text.)"
+                    )
 
-                st.session_state.messages.append({"role": "assistant", "content": summary})
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": summary}
+                )
                 with st.chat_message("assistant"):
                     st.markdown(summary)
-                    explanation = explain_with_gemini(df_selected, user_input) if MODEL else "(No Gemini) local summary used."
+                    explanation = (
+                        explain_with_gemini(df_selected, user_input)
+                        if MODEL
+                        else "(No Gemini) local summary used."
+                    )
                     st.markdown(f"**Analysis:** {explanation}")
 
 # -------------------- HISTORY PANEL --------------------
@@ -444,13 +494,19 @@ if st.session_state.datasets:
     st.subheader("📚 Previous Queries")
     for ds in st.session_state.datasets:
         st.markdown(f"**Query #{ds['id']} — {ds['ocean']}**")
-        st.markdown(f"{ds['start_date']} → {ds['end_date']} — variables: {', '.join(ds['variables']) if ds['variables'] else 'none'}")
+        st.markdown(
+            f"{ds['start_date']} → {ds['end_date']} — variables: {', '.join(ds['variables']) if ds['variables'] else 'none'}"
+        )
         try:
             st.dataframe(ds["df"].head(7))
         except Exception:
             st.write("(Preview unavailable)")
         show_key = f"show_full_{ds['id']}"
-        checked = st.checkbox("📌 Show full data", value=st.session_state.get(show_key, False), key=show_key)
+        checked = st.checkbox(
+            "📌 Show full data",
+            value=st.session_state.get(show_key, False),
+            key=show_key,
+        )
         if checked:
             with st.expander("📊 Full Data (expand/minimize)", expanded=True):
                 st.dataframe(ds["df"])
