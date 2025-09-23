@@ -9,6 +9,8 @@ from decouple import config
 from argopy import DataFetcher, set_options
 import google.generativeai as genai
 
+import visualize
+
 # -------------------- CONFIG --------------------
 
 API_KEY = config("GEMINI_API_KEY", default="").strip()
@@ -488,6 +490,13 @@ if user_input:
                     )
                     st.markdown(f"**Analysis:** {explanation}")
 
+                # Render visualizations in a stable container below the chat bubble
+                visualize.show_visualizations(
+                    df_selected,
+                    variables=selected,
+                    dataset_id=ds_id
+                )
+
 # -------------------- HISTORY PANEL --------------------
 if st.session_state.datasets:
     st.markdown("---")
@@ -518,3 +527,4 @@ if st.session_state.datasets:
             mime="text/csv",
             key=f"download_{ds['id']}",
         )
+
