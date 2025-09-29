@@ -11,7 +11,7 @@ import google.generativeai as genai
 
 # -------------------- CONFIG --------------------
 
-API_KEY = config("GENOMI_API_KEY", default="").strip()
+API_KEY = config("GEMINI_API_KEY", default="").strip()
 if API_KEY:
     try:
         genai.configure(api_key=API_KEY)
