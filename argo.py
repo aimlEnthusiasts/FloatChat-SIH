@@ -15,7 +15,7 @@ API_KEY = config("GEMINI_API_KEY", default="").strip()
 if API_KEY:
     try:
         genai.configure(api_key=API_KEY)
-        MODEL = genai.GenerativeModel("gemini-1.5-flash")
+        MODEL = genai.GenerativeModel("gemini-2.5-flash")
     except Exception as e:
         st.warning(f"Gemini model init failed: {e}")
         MODEL = None
