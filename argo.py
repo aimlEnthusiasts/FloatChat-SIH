@@ -17,7 +17,7 @@ API_KEY = config("GEMINI_API_KEY", default="").strip()
 if API_KEY:
     try:
         genai.configure(api_key=API_KEY)
-        MODEL = genai.GenerativeModel("gemini-1.5-flash")
+        MODEL = genai.GenerativeModel("gemini-2.5-flash")
     except Exception as e:
         st.warning(f"Gemini model init failed: {e}")
         MODEL = None
@@ -492,9 +492,7 @@ if user_input:
 
                 # Render visualizations in a stable container below the chat bubble
                 visualize.show_visualizations(
-                    df_selected,
-                    variables=selected,
-                    dataset_id=ds_id
+                    df_selected, variables=selected, dataset_id=ds_id
                 )
 
 # -------------------- HISTORY PANEL --------------------
@@ -527,4 +525,3 @@ if st.session_state.datasets:
             mime="text/csv",
             key=f"download_{ds['id']}",
         )
-
